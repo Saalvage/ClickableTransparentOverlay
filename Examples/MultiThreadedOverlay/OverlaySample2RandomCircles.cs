@@ -1,8 +1,9 @@
-﻿namespace MultiThreadedOverlay
+﻿using Hexa.NET.ImGui;
+
+namespace MultiThreadedOverlay
 {
     using System;
     using System.Numerics;
-    using ImGuiNET;
 
     public class OverlaySample2RandomCircles
     {

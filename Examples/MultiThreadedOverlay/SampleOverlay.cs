@@ -1,4 +1,5 @@
-﻿using SixLabors.ImageSharp;
+﻿using Hexa.NET.ImGui;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.DXGI;
 
@@ -11,7 +12,6 @@ namespace MultiThreadedOverlay
     using System.Threading;
     using ClickableTransparentOverlay;
     using ClickableTransparentOverlay.Win32;
-    using ImGuiNET;
 
     /// <summary>
     /// Render Loop and Logic Loop are independent from each other. 

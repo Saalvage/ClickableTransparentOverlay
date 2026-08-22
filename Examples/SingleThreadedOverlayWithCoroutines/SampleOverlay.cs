@@ -1,11 +1,11 @@
-﻿using Vortice.DXGI;
+﻿using Hexa.NET.ImGui;
+using Vortice.DXGI;
 
 namespace SingleThreadedOverlayWithCoroutines
 {
     using System.Collections.Generic;
     using ClickableTransparentOverlay;
     using Coroutine;
-    using ImGuiNET;
     using SixLabors.ImageSharp.PixelFormats;
     using SixLabors.ImageSharp;
     using System.Threading.Tasks;
@@ -19,7 +19,7 @@ namespace SingleThreadedOverlayWithCoroutines
     internal class SampleOverlay : Overlay
     {
         private ImFontPtr? font2 = null;
-        private readonly ushort[] custom1 = new ushort[3] { 0x0020, 0xFFFF, 0x00 };
+        private readonly uint[] custom1 = new uint[3] { 0x0020, 0xFFFF, 0x00 };
         private int fontSize = 13;
         private int data;
         private string data2;
@@ -114,7 +114,7 @@ namespace SingleThreadedOverlayWithCoroutines
 
             if (ImGui.Button("Change Font (更改字体)"))
             {
-                this.ReplaceFont(@"C:\Windows\Fonts\msyh.ttc", fontSize, FontGlyphRangeType.ChineseSimplifiedCommon);
+                this.ReplaceFont(@"C:\Windows\Fonts\msyh.ttc", fontSize);
                 font2 = null;
             }
 
@@ -132,7 +132,7 @@ namespace SingleThreadedOverlayWithCoroutines
 
             if (font2 != null)
             {
-                ImGui.PushFont(font2.Value);
+                ImGui.PushFont(font2.Value, font2.Value.LegacySize);
             }
 
             ImGui.ShowFontSelector("foo");
@@ -146,12 +146,9 @@ namespace SingleThreadedOverlayWithCoroutines
                         io.Fonts.AddFontFromFileTTF(@"C:\Windows\Fonts\arial.ttf", fontSize, config, io.Fonts.GetGlyphRangesDefault());
                     }
 
-                    fixed (ushort* p = &custom1[0])
+                    if (File.Exists(@"C:\Windows\Fonts\msyh.ttc"))
                     {
-                        if (File.Exists(@"C:\Windows\Fonts\msyh.ttc"))
-                        {
-                            font2 = io.Fonts.AddFontFromFileTTF(@"C:\Windows\Fonts\msyh.ttc", fontSize * 2, config, new IntPtr(p));
-                        }
+                        font2 = io.Fonts.AddFontFromFileTTF(@"C:\Windows\Fonts\msyh.ttc", fontSize * 2, config, custom1[0]);
                     }
                 });
             }
@@ -167,17 +164,14 @@ namespace SingleThreadedOverlayWithCoroutines
                 this.ReplaceFont(config =>
                 {
                     var io = ImGui.GetIO();
-                    io.Fonts.AddFontFromFileTTF(@"C:\Windows\Fonts\msyh.ttc", fontSize, config, io.Fonts.GetGlyphRangesChineseSimplifiedCommon());
-                    config->MergeMode = 1;
-                    config->OversampleH = 1;
-                    config->OversampleV = 1;
-                    config->PixelSnapH = 1;
+                    io.Fonts.AddFontFromFileTTF(@"C:\Windows\Fonts\msyh.ttc", fontSize, config);
+                    config.MergeMode = true;
+                    config.OversampleH = 1;
+                    config.OversampleV = 1;
+                    config.PixelSnapH = true;
 
-                    var custom2 = new ushort[] { 0xe005, 0xf8ff, 0x00 };
-                    fixed (ushort* p = &custom2[0])
-                    {
-                        io.Fonts.AddFontFromFileTTF("fa-brands-400.ttf", fontSize, config, new IntPtr(p));
-                    }
+                    var custom2 = new uint[] { 0xe005, 0xf8ff, 0x00 };
+                    io.Fonts.AddFontFromFileTTF("fa-brands-400.ttf", fontSize, config, custom2[0]);
                 });
             }
 

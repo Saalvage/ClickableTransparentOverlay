@@ -1,8 +1,9 @@
-﻿namespace SimpleExample
+﻿using Hexa.NET.ImGui;
+
+namespace SimpleExample
 {
     using ClickableTransparentOverlay;
     using System.Threading.Tasks;
-    using ImGuiNET;
 
     internal class SampleOverlay : Overlay
     {

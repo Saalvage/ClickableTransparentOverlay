@@ -1,4 +1,5 @@
 ﻿using ClickableTransparentOverlay.Win32;
+using Hexa.NET.ImGui;
 
 namespace ClickableTransparentOverlay
 {
@@ -16,7 +17,6 @@ namespace ClickableTransparentOverlay
     using Vortice.Mathematics;
     using Point = System.Drawing.Point;
     using Size = System.Drawing.Size;
-    using ImGuiNET;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -223,7 +223,7 @@ namespace ClickableTransparentOverlay
         /// <param name="size">font size to load.</param>
         /// <param name="language">supported language by the font.</param>
         /// <returns>true if the font replacement is valid otherwise false.</returns>
-        public unsafe bool ReplaceFont(string pathName, int size, FontGlyphRangeType language)
+        public unsafe bool ReplaceFont(string pathName, float size)
         {
             if (!File.Exists(pathName))
             {
@@ -233,21 +233,8 @@ namespace ClickableTransparentOverlay
             this.fontUpdates.Enqueue(config =>
             {
                 var io = ImGui.GetIO();
-                var glyphRange = language switch
-                {
-                    FontGlyphRangeType.English => io.Fonts.GetGlyphRangesDefault(),
-                    FontGlyphRangeType.ChineseSimplifiedCommon => io.Fonts.GetGlyphRangesChineseSimplifiedCommon(),
-                    FontGlyphRangeType.ChineseFull => io.Fonts.GetGlyphRangesChineseFull(),
-                    FontGlyphRangeType.Japanese => io.Fonts.GetGlyphRangesJapanese(),
-                    FontGlyphRangeType.Korean => io.Fonts.GetGlyphRangesKorean(),
-                    FontGlyphRangeType.Thai => io.Fonts.GetGlyphRangesThai(),
-                    FontGlyphRangeType.Vietnamese => io.Fonts.GetGlyphRangesVietnamese(),
-                    FontGlyphRangeType.Cyrillic => io.Fonts.GetGlyphRangesCyrillic(),
-                    _ => throw new Exception($"Font Glyph Range (${language}) is not supported.")
-                };
-
-                io.Fonts.AddFontFromFileTTF(pathName, size, config, glyphRange);
-                ImGuiNative.igGetIO()->FontDefault = null;
+                io.Fonts.AddFontFromFileTTF(pathName, size, config);
+                ImGui.GetIO().FontDefault = null;
             });
 
             return true;
@@ -260,7 +247,7 @@ namespace ClickableTransparentOverlay
         /// <param name="size">font size to load.</param>
         /// <param name="glyphRange">custom glyph range of the font to load. Read <see cref="FontGlyphRangeType"/> for more detail.</param>
         /// <returns>>true if the font replacement is valid otherwise false.</returns>
-        public unsafe bool ReplaceFont(string pathName, int size, ushort[] glyphRange)
+        public unsafe bool ReplaceFont(string pathName, float size, uint[] glyphRange)
         {
             if (!File.Exists(pathName))
             {
@@ -270,11 +257,8 @@ namespace ClickableTransparentOverlay
             this.fontUpdates.Enqueue(config =>
             {
                 var io = ImGui.GetIO();
-                fixed (ushort* p = &glyphRange[0])
-                {
-                    io.Fonts.AddFontFromFileTTF(pathName, size, config, new IntPtr(p));
-                    ImGuiNative.igGetIO()->FontDefault = null;
-                }
+                io.Fonts.AddFontFromFileTTF(pathName, size, config, glyphRange[0]);
+                ImGui.GetIO().FontDefault = null;
             });
 
             return true;
@@ -290,7 +274,7 @@ namespace ClickableTransparentOverlay
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontDefault(config);
-                ImGuiNative.igGetIO()->FontDefault = null;
+                ImGui.GetIO().FontDefault = null;
             });
 
             return true;
@@ -303,7 +287,7 @@ namespace ClickableTransparentOverlay
         public unsafe bool ReplaceFont(FontHelper.FontLoadDelegate fontLoadDelegate)
         {
             // have to do this because of issue: https://github.com/ocornut/imgui/issues/6858
-            ImGuiNative.igGetIO()->FontDefault = null;
+            ImGui.GetIO().FontDefault = null;
             this.fontUpdates.Enqueue(fontLoadDelegate);
             return true;
         }
@@ -404,18 +388,20 @@ namespace ClickableTransparentOverlay
         /// <param name="height">Image height.</param>
         /// <param name="format">Format of the image data.</param>
         /// <param name="handle">output pointer to the image in the graphic device.</param>
-        public void AddOrGetImagePointer<T>(string name, Memory<T> memory, int width, int height, Format format,
-            out IntPtr handle) where T : unmanaged
+        public unsafe void AddOrGetImagePointer<T>(string name, Memory<T> memory, int width, int height, Format format,
+            out ImTextureRef handle) where T : unmanaged
         {
+            ImTextureID id;
             if (this.loadedTexturesPtrs.TryGetValue(name, out var data))
             {
-                handle = data.Handle;
+                id = data.Handle;
             }
             else
             {
-                handle = this.renderer.CreateImageTexture(memory, width, height, format);
-                this.loadedTexturesPtrs.Add(name, new(handle, (uint)width, (uint)height));
+                id = this.renderer.CreateImageTexture(memory, width, height, format);
+                this.loadedTexturesPtrs.Add(name, new(id, (uint)width, (uint)height));
             }
+            handle = new(null, id);
         }
 
         /// <summary>

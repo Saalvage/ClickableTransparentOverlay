@@ -1,8 +1,8 @@
 ﻿using System.Buffers;
+using Hexa.NET.ImGui;
 
 namespace ClickableTransparentOverlay
 {
-    using ImGuiNET;
     using ImDrawIdx = System.UInt16;
     using Vortice.DXGI;
     using Vortice.Direct3D;
@@ -33,7 +33,7 @@ namespace ClickableTransparentOverlay
         ID3D11BlendState blendState;
         ID3D11DepthStencilState depthStencilState;
         int vertexBufferSize = 5000, indexBufferSize = 10000;
-        readonly Dictionary<IntPtr, ID3D11ShaderResourceView> textureResources = new();
+        readonly Dictionary<ImTextureID, ID3D11ShaderResourceView> textureResources = new();
 
         public ImGuiRenderer(ID3D11Device device, ID3D11DeviceContext deviceContext, int width, int height)
         {
@@ -46,6 +46,7 @@ namespace ClickableTransparentOverlay
             ImGui.CreateContext();
             var io = ImGui.GetIO();
             io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasTextures;
             io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard;
             io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
             ImGui.StyleColorsDark();
@@ -69,6 +70,7 @@ namespace ClickableTransparentOverlay
             if (data.DisplaySize.X <= 0.0f || data.DisplaySize.Y <= 0.0f)
                 return;
 
+            SyncTextures();
             ID3D11DeviceContext ctx = deviceContext;
 
             if (vertexBuffer == null || vertexBufferSize < data.TotalVtxCount)
@@ -104,7 +106,7 @@ namespace ClickableTransparentOverlay
             var indexResource = ctx.Map(indexBuffer, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
             var vertexResourcePointer = (ImDrawVert*)vertexResource.DataPointer;
             var indexResourcePointer = (ImDrawIdx*)indexResource.DataPointer;
-            for (int n = 0; n < data.CmdListsCount; n++)
+            for (int n = 0; n < data.CmdLists.Size; n++)
             {
                 var cmdlList = data.CmdLists[n];
 
@@ -144,15 +146,19 @@ namespace ClickableTransparentOverlay
             // (Because we merged all buffers into a single one, we maintain our own offset into them)
             int global_idx_offset = 0;
             int global_vtx_offset = 0;
-            for (int n = 0; n < data.CmdListsCount; n++)
+            for (int n = 0; n < data.CmdLists.Size; n++)
             {
                 var cmdList = data.CmdLists[n];
                 for (int i = 0; i < cmdList.CmdBuffer.Size; i++)
                 {
                     var cmd = cmdList.CmdBuffer[i];
-                    if (cmd.UserCallback != IntPtr.Zero)
+                    if (cmd.UserCallback != null)
                     {
                         throw new NotImplementedException("user callbacks not implemented");
+                    }
+                    else if (cmd.UserCallback == unchecked((void*)(-8))) // ImDrawCallback_ResetRenderState
+                    {
+                        SetupRenderState(data, ctx);
                     }
                     else
                     {
@@ -202,7 +208,7 @@ namespace ClickableTransparentOverlay
             ImGui.GetIO().DisplaySize = new Vector2(width, height);
         }
 
-        public IntPtr CreateImageTexture<T>(Memory<T> memory, int width, int height, Format format) where T : unmanaged
+        public ImTextureID CreateImageTexture<T>(Memory<T> memory, int width, int height, Format format) where T : unmanaged
         {
             var texDesc = new Texture2DDescription(format, width, height, 1, 1);
 
@@ -222,12 +228,11 @@ namespace ClickableTransparentOverlay
         public void UpdateFontTexture(FontHelper.FontLoadDelegate fontLoadFunc)
         {
             var io = ImGui.GetIO();
-            this.DeRegisterTexture(io.Fonts.TexID)?.Dispose();
             io.Fonts.Clear();
-            var config = ImGuiNative.ImFontConfig_ImFontConfig();
+            var config = ImGui.ImFontConfig();
             fontLoadFunc(config);
-            this.CreateFontsTexture();
-            ImGuiNative.ImFontConfig_destroy(config);
+            io.FontDefault = null;
+            config.Destroy();
         }
 
         void SetupRenderState(ImDrawDataPtr drawData, ID3D11DeviceContext ctx)
@@ -253,21 +258,61 @@ namespace ClickableTransparentOverlay
             ctx.RSSetState(rasterizerState);
         }
 
-        void CreateFontsTexture()
+        void SyncTextures()
         {
-            var io = ImGui.GetIO();
-            io.Fonts.GetTexDataAsRGBA32(out byte* pixels, out var width, out var height);
-            var texDesc = new Texture2DDescription(Format.R8G8B8A8_UNorm, width, height, 1, 1);
-            var subResource = new SubresourceData(pixels, texDesc.Width * 4);
-            using var texture = device.CreateTexture2D(texDesc, new[] { subResource });
-            var resViewDesc = new ShaderResourceViewDescription(
-                texture,
-                ShaderResourceViewDimension.Texture2D,
-                Format.R8G8B8A8_UNorm,
-                0,
-                texDesc.MipLevels);
-            io.Fonts.SetTexID(RegisterTexture(device.CreateShaderResourceView(texture, resViewDesc)));
-            io.Fonts.ClearTexData();
+            var io = ImGui.GetPlatformIO();
+            for (var i = 0; i < io.Textures.Size; i++)
+            {
+                var tex = io.Textures[i];
+                if (tex.Status != ImTextureStatus.Ok)
+                {
+                    this.UpdateTexture(tex);
+                }
+            }
+        }
+
+        void UpdateTexture(ImTextureDataPtr tex) {
+            switch (tex.Status) {
+                case ImTextureStatus.WantCreate: {
+                    var format = tex.Format == ImTextureFormat.Alpha8 ? Format.R8_UNorm : Format.R8G8B8A8_UNorm;
+                    var texDesc = new Texture2DDescription(format, tex.Width, tex.Height, 1, 1);
+                    var subResource = new SubresourceData(tex.GetPixels(), tex.GetPitch());
+                    using var texture = device.CreateTexture2D(texDesc, new[] { subResource });
+
+                    var resViewDesc = new ShaderResourceViewDescription(
+                        texture,
+                        ShaderResourceViewDimension.Texture2D,
+                        format,
+                        0,
+                        texDesc.MipLevels);
+
+                    var srv = device.CreateShaderResourceView(texture, resViewDesc);
+                    tex.SetTexID(this.RegisterTexture(srv));
+                    tex.SetStatus(ImTextureStatus.Ok);
+                    break;
+                }
+                case ImTextureStatus.WantUpdates: {
+                    if (textureResources.TryGetValue(tex.GetTexID(), out var srv))
+                    {
+                        using var texture = srv.Resource.QueryInterface<ID3D11Texture2D>();
+                        for (var i = 0; i < tex.Updates.Size; i++)
+                        {
+                            var rect = tex.Updates[i];
+                            var box = new Box(rect.X, rect.Y, 0, rect.X + rect.W, rect.Y + rect.H, 1);
+                            deviceContext.UpdateSubresource(texture, 0, box, (IntPtr)tex.GetPixelsAt(rect.X, rect.Y), tex.GetPitch(), 0);
+                        }
+                    }
+
+                    tex.SetStatus(ImTextureStatus.Ok);
+                    break;
+                }
+                case ImTextureStatus.WantDestroy when tex.UnusedFrames > 0: {
+                    this.DeRegisterTexture(tex.GetTexID())?.Dispose();
+                    tex.SetTexID(ImTextureID.Null);
+                    tex.SetStatus(ImTextureStatus.Destroyed);
+                    break;
+                }
+            }
         }
 
         void CreateFontSampler()
@@ -286,14 +331,14 @@ namespace ClickableTransparentOverlay
             this.fontSampler = device.CreateSamplerState(samplerDesc);
         }
 
-        IntPtr RegisterTexture(ID3D11ShaderResourceView texture)
+        ImTextureID RegisterTexture(ID3D11ShaderResourceView texture)
         {
             var imguiID = texture.NativePointer;
             textureResources.TryAdd(imguiID, texture);
             return imguiID;
         }
 
-        ID3D11ShaderResourceView? DeRegisterTexture(IntPtr texturePtr)
+        ID3D11ShaderResourceView? DeRegisterTexture(ImTextureID texturePtr)
         {
             if (textureResources.Remove(texturePtr, out var texture))
             {
@@ -399,7 +444,6 @@ namespace ClickableTransparentOverlay
             var depthDesc = new DepthStencilDescription(false, DepthWriteMask.All, ComparisonFunction.Always);
             depthStencilState = device.CreateDepthStencilState(depthDesc);
 
-            this.CreateFontsTexture();
             this.CreateFontSampler();
         }
 
