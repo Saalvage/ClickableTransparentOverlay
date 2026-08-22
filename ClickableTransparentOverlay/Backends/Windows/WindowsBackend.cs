@@ -31,15 +31,10 @@ public class WindowsBackend : IBackend
     
     public static IBackend Create(ImGuiContextPtr ctx, string windowTitle) => new WindowsBackend(ctx, windowTitle);
     
-    public void BeginRender()
+    public WindowsBackend(ImGuiContextPtr ctx, string windowTitle)
     {
-        if (User32.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1))
-        {
-            User32.TranslateMessage(ref msg);
-            User32.DispatchMessage(ref msg);
-        }
-        ImGuiImplWin32.NewFrame();
-        ImGuiImplD3D11.NewFrame();
+        _context = ctx;
+        Construct(ctx, windowTitle, out Device, out DeviceContext, out SelfPointer, out Window);
     }
 
     protected virtual unsafe void Construct(ImGuiContextPtr ctx, string windowTitle, out ID3D11Device device,
@@ -145,14 +140,19 @@ public class WindowsBackend : IBackend
         new ID3D11ShaderResourceView(texture).Release();
     }
     
+    public void BeginRender()
+    {
+        if (User32.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1))
+        {
+            User32.TranslateMessage(ref msg);
+            User32.DispatchMessage(ref msg);
+        }
+        ImGuiImplWin32.NewFrame();
+        ImGuiImplD3D11.NewFrame();
+    }
+    
     public void EndRender()
     {
         ImGuiImplD3D11.RenderDrawData(ImGui.GetDrawData());
-    }
-
-    public WindowsBackend(ImGuiContextPtr ctx, string windowTitle)
-    {
-        _context = ctx;
-        Construct(ctx, windowTitle, out Device, out DeviceContext, out SelfPointer, out Window);
     }
 }

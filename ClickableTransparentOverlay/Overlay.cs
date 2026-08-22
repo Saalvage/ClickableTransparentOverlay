@@ -302,6 +302,7 @@ namespace ClickableTransparentOverlay
                     if (sleep > TimeSpan.Zero)
                     {
                         Thread.Sleep(sleep);
+                        now = Stopwatch.GetTimestamp();
                     }
                 }
 
