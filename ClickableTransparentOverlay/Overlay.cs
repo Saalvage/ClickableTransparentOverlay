@@ -94,7 +94,9 @@ namespace ClickableTransparentOverlay
         /// <param name="DPIAware">
         /// should the overlay scale with windows scale value or not.
         /// </param>
-        public Overlay(string windowTitle, bool DPIAware) : this(windowTitle, DPIAware, 800, 600)
+        public Overlay(string windowTitle, bool DPIAware) : this(windowTitle, DPIAware,
+            User32.GetSystemMetrics(SystemMetrics.SM_CXSCREEN),
+            User32.GetSystemMetrics(SystemMetrics.SM_CYSCREEN))
         {
         }
 
@@ -372,7 +374,7 @@ namespace ClickableTransparentOverlay
         {
             get
             {
-                return User32.GetSystemMetrics(0x50); // SM_CMONITORS
+                return User32.GetSystemMetrics(SystemMetrics.SM_CMONITORS);
             }
         }
 

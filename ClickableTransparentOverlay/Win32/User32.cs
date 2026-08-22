@@ -998,6 +998,13 @@
         OEM_CLEAR = 0xFE
     }
 
+    internal enum SystemMetrics
+    {
+        SM_CXSCREEN = 0x00,
+        SM_CYSCREEN = 0x01,
+        SM_CMONITORS = 0x50,
+    }
+
     #endregion
 
     #region Structures
@@ -1160,6 +1167,6 @@
         public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
 
         [DllImport(LibraryName, ExactSpelling = true)]
-        public static extern int GetSystemMetrics(int smIndex);
+        public static extern int GetSystemMetrics(SystemMetrics smIndex);
     }
 }
