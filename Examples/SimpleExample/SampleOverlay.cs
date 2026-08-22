@@ -1,11 +1,11 @@
-﻿using Hexa.NET.ImGui;
+﻿using ClickableTransparentOverlay.Backends.Windows;
+using Hexa.NET.ImGui;
 
 namespace SimpleExample
 {
     using ClickableTransparentOverlay;
-    using System.Threading.Tasks;
 
-    internal class SampleOverlay : Overlay
+    internal class SampleOverlay : Overlay<WindowsBackend>
     {
         private bool wantKeepDemoWindow = true;
         private int FPSHelper;
@@ -13,11 +13,6 @@ namespace SimpleExample
         public SampleOverlay()
         {
             this.FPSHelper = this.FPSLimit;
-        }
-
-        protected override Task PostInitialized()
-        {
-            return Task.CompletedTask;
         }
 
         protected override void Render()

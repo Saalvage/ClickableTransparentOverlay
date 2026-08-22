@@ -1,6 +1,5 @@
-﻿using ClickableTransparentOverlay.Win32;
+﻿using ClickableTransparentOverlay.Backends;
 using Hexa.NET.ImGui;
-using Hexa.NET.ImGui.Backends.Win32;
 
 namespace ClickableTransparentOverlay
 {
@@ -8,45 +7,27 @@ namespace ClickableTransparentOverlay
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
-    using System.Linq;
-    using System.Runtime.CompilerServices;
     using System.Threading;
     using System.Threading.Tasks;
-    using Vortice.Direct3D;
-    using Vortice.Direct3D11;
-    using Vortice.DXGI;
-    using Vortice.Mathematics;
     using System.Collections.Concurrent;
 
     /// <summary>
-    /// A class to create clickable transparent overlay on windows machine.
+    /// A class to create a multi-viewport ImGui application without a main window.
     /// </summary>
-    public abstract class Overlay : IDisposable
+    public abstract class Overlay<T> : IDisposable where T : IBackend
     {
-        private readonly string title;
-        private readonly Format format;
+        private bool _disposed;
+        
+        private Task _runTask;
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private readonly TaskCompletionSource _ready = new();
+        
+        private readonly string _title;
+        
+        private IBackend _backend;
 
-        private WNDCLASSEX wndClass;
-
-        /// <summary>
-        ///  Do not assume this class is initialized.
-        ///  Consider using this variable only in <see cref="PostInitialized"/> or <see cref="Render"/> function.
-        /// </summary>
-        public Win32Window window;
-        private ID3D11Device device;
-        private ID3D11DeviceContext deviceContext;
-
-        private ImGuiRenderer renderer;
-
-        private bool _disposedValue;
-        private IntPtr selfPointer;
-        private Thread renderThread;
-        private volatile CancellationTokenSource cancellationTokenSource;
-        private volatile bool overlayIsReady;
-
-        private Dictionary<string, (IntPtr Handle, uint Width, uint Height)> loadedTexturesPtrs;
-
-        private readonly ConcurrentQueue<FontHelper.FontLoadDelegate> fontUpdates;
+        private readonly Dictionary<string, ImTextureID> _loadedTextures = [];
+        private readonly ConcurrentQueue<Action<ImFontConfigPtr>> _fontUpdates = [];
 
         #region Constructors
 
@@ -56,24 +37,11 @@ namespace ClickableTransparentOverlay
         /// <param name="windowTitle">
         /// Title of the window created by the overlay
         /// </param>
-        /// <param name="DPIAware">
-        /// should the overlay scale with windows scale value or not.
-        /// </param>
-        public Overlay(string windowTitle = "Overlay", bool DPIAware = false)
+        public Overlay(string windowTitle = "Overlay")
         {
-            this.VSync = false;
-            this.FPSLimit = 60;
-            this._disposedValue = false;
-            this.overlayIsReady = false;
-            this.title = windowTitle;
-            this.cancellationTokenSource = new();
-            this.format = Format.R8G8B8A8_UNorm;
-            this.loadedTexturesPtrs = new();
-            this.fontUpdates = new();
-            if (DPIAware)
-            {
-                User32.SetProcessDPIAware();
-            }
+            FPSLimit = 60;
+            _disposed = false;
+            _title = windowTitle;
         }
 
         #endregion
@@ -86,15 +54,14 @@ namespace ClickableTransparentOverlay
         /// <returns>A Task that finishes once the overlay window is ready</returns>
         public async Task Start()
         {
-            this.renderThread = new Thread(async () =>
+            _runTask = Task.Run(() =>
             {
-                await this.InitializeResources();
-                this.ReplaceFontIfRequired();
-                this.RunInfiniteLoop(this.cancellationTokenSource.Token);
+                InitializeResources();
+                ReplaceFontIfRequired();
+                RunInfiniteLoop(_cancellationTokenSource.Token);
             });
 
-            this.renderThread.Start();
-            await WaitHelpers.SpinWait(() => this.overlayIsReady);
+            await _ready.Task;
         }
 
         /// <summary>
@@ -103,28 +70,33 @@ namespace ClickableTransparentOverlay
         /// <returns>A task that finishes once the overlay window closes</returns>
         public virtual async Task Run()
         {
-            if (!this.overlayIsReady)
+            if (!_ready.Task.IsCompleted)
             {
-                await this.Start();
+                await Start();
             }
 
-            await WaitHelpers.SpinWait(() => this.cancellationTokenSource.IsCancellationRequested);
+            await _runTask;
         }
 
         /// <summary>
-        /// Safely Closes the Overlay.
+        /// Safely closes the overlay.
         /// </summary>
         public virtual void Close()
         {
-            this.cancellationTokenSource.Cancel();
+            _cancellationTokenSource.Cancel();
         }
 
+        ~Overlay()
+        {
+            Dispose(false);
+        }
+        
         /// <summary>
         /// Safely dispose all the resources created by the overlay
         /// </summary>
         public void Dispose()
         {
-            this.Dispose(true);
+            Dispose(true);
             GC.SuppressFinalize(this);
         }
 
@@ -133,7 +105,6 @@ namespace ClickableTransparentOverlay
         /// </summary>
         /// <param name="pathName">pathname to the TTF font file.</param>
         /// <param name="size">font size to load.</param>
-        /// <param name="language">supported language by the font.</param>
         /// <returns>true if the font replacement is valid otherwise false.</returns>
         public unsafe bool ReplaceFont(string pathName, float size)
         {
@@ -142,7 +113,7 @@ namespace ClickableTransparentOverlay
                 return false;
             }
 
-            this.fontUpdates.Enqueue(config =>
+            _fontUpdates.Enqueue(config =>
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontFromFileTTF(pathName, size, config);
@@ -166,7 +137,7 @@ namespace ClickableTransparentOverlay
                 return false;
             }
 
-            this.fontUpdates.Enqueue(config =>
+            _fontUpdates.Enqueue(config =>
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontFromFileTTF(pathName, size, config, glyphRange[0]);
@@ -182,7 +153,7 @@ namespace ClickableTransparentOverlay
         /// <returns>always return true</returns>
         public unsafe bool ReplaceFont()
         {
-            this.fontUpdates.Enqueue(config =>
+            _fontUpdates.Enqueue(config =>
             {
                 var io = ImGui.GetIO();
                 io.Fonts.AddFontDefault(config);
@@ -196,39 +167,24 @@ namespace ClickableTransparentOverlay
         /// Replaces the ImGui font with another one.
         /// </summary>
         /// <param name="fontLoadDelegate">instructions for loading the font</param>
-        public unsafe bool ReplaceFont(FontHelper.FontLoadDelegate fontLoadDelegate)
+        public unsafe bool ReplaceFont(Action<ImFontConfigPtr> fontLoadDelegate)
         {
             // have to do this because of issue: https://github.com/ocornut/imgui/issues/6858
             ImGui.GetIO().FontDefault = null;
-            this.fontUpdates.Enqueue(fontLoadDelegate);
+            _fontUpdates.Enqueue(fontLoadDelegate);
             return true;
         }
 
         /// <summary>
-        /// Enable or disable the vsync on the overlay.
-        /// You can either use the <see cref="FPSLimit"/> or <see cref="VSync"/>.
-        /// VSync will be given the preference if both are set.
-        /// </summary>
-        public bool VSync;
-
-        /// <summary>
-        /// Gets or sets the FPS Limits of the overlay.
-        /// You can either use the <see cref="FPSLimit"/> or <see cref="VSync"/>.
-        /// VSync will be given the preference if both are set.
+        /// Gets or sets the FPS limits of the overlay.
         /// </summary>
         public int FPSLimit
         {
             get;
             set {
-                if (value == 0)
+                if (value >= 0)
                 {
                     field = value;
-                    _ = Winmm.MM_EndPeriod(1);
-                }
-                else if (value > 0)
-                {
-                    field = value;
-                    _ = Winmm.MM_BeginPeriod(1);
                 }
                 else
                 {
@@ -249,18 +205,13 @@ namespace ClickableTransparentOverlay
         /// <param name="height">Image height.</param>
         /// <param name="format">Format of the image data.</param>
         /// <param name="handle">output pointer to the image in the graphic device.</param>
-        public unsafe void AddOrGetImagePointer<T>(string name, Memory<T> memory, int width, int height, Format format,
+        public unsafe void AddOrGetImagePointer<T>(string name, Memory<T> memory, int width, int height, uint format,
             out ImTextureRef handle) where T : unmanaged
         {
-            ImTextureID id;
-            if (this.loadedTexturesPtrs.TryGetValue(name, out var data))
+            if (!_loadedTextures.TryGetValue(name, out var id))
             {
-                id = data.Handle;
-            }
-            else
-            {
-                id = this.renderer.CreateImageTexture(memory, width, height, format);
-                this.loadedTexturesPtrs.Add(name, new(id, (uint)width, (uint)height));
+                id = _backend.LoadTexture(memory, width, height, format);
+                _loadedTextures.Add(name, id);
             }
             handle = new(null, id);
         }
@@ -272,9 +223,10 @@ namespace ClickableTransparentOverlay
         /// <returns> true if the image is removed otherwise false.</returns>
         public bool RemoveImage(string key)
         {
-            if (this.loadedTexturesPtrs.Remove(key, out var data))
+            if (_loadedTextures.Remove(key, out var data))
             {
-                return this.renderer.RemoveImageTexture(data.Handle);
+                _backend.FreeTexture(data);
+                return true;
             }
 
             return false;
@@ -284,55 +236,36 @@ namespace ClickableTransparentOverlay
 
         protected virtual void Dispose(bool disposing)
         {
-            if (this._disposedValue)
+            if (_disposed)
             {
                 return;
             }
+            _disposed = true;
+
+            _cancellationTokenSource.Cancel();
+            _runTask.Wait();
+            
+            foreach (var (_, tex) in _loadedTextures)
+            {
+                _backend.FreeTexture(tex);
+            }
+            _loadedTextures.Clear();
+
+            _backend.Dispose();
+            
+            ImGui.DestroyContext();
 
             if (disposing)
             {
-                if (this.FPSLimit > 0)
-                {
-                    Winmm.MM_EndPeriod(1);
-                }
-
-                this.renderThread?.Join();
-                foreach(var key in this.loadedTexturesPtrs.Keys.ToArray())
-                {
-                    this.RemoveImage(key);
-                }
-
-                this.cancellationTokenSource?.Dispose();
-                this.fontUpdates?.Clear();
-                this.renderer?.Dispose();
-                this.window?.Dispose();
-                this.deviceContext?.Release();
-                this.device?.Release();
-                
-                ImGuiImplWin32.Shutdown();
-                ImGuiImplWin32.SetCurrentContext(ImGuiContextPtr.Null);
-                ImGui.DestroyContext();
+                _fontUpdates.Clear();
             }
-
-            if (this.selfPointer != IntPtr.Zero)
-            {
-                if (!User32.UnregisterClass(this.title, this.selfPointer))
-                {
-                    throw new Exception($"Failed to Unregister {this.title} class during dispose.");
-                }
-
-                this.selfPointer = IntPtr.Zero;
-            }
-
-            this._disposedValue = true;
         }
 
         /// <summary>
         /// Steps to execute after the overlay has fully initialized.
         /// </summary>
-        protected virtual Task PostInitialized()
+        protected virtual void PostInitialized()
         {
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -341,82 +274,56 @@ namespace ClickableTransparentOverlay
         /// <returns>Task that finishes once per frame</returns>
         protected abstract void Render();
 
-        private void RunInfiniteLoop(CancellationToken token)
+        private void RunInfiniteLoop(CancellationToken cancellationToken)
         {
-            var stopwatch = Stopwatch.StartNew();
-            var currentTimeSec = 0f;
-            var clearColor = new Color4(0.0f);
-            var delayMs = 0f;
-            var sleepTimeMs = 0;
-            while (!token.IsCancellationRequested)
+            var now = Stopwatch.GetTimestamp();
+            while (!cancellationToken.IsCancellationRequested)
             {
-                currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
-                stopwatch.Restart();
-                this.window.PumpEvents();
-                ImGuiImplWin32.NewFrame();
-                this.renderer.Update(currentTimeSec, Render);
-                this.renderer.Render();
-                if (this.FPSLimit > 0)
+                var prev = now;
+                now = Stopwatch.GetTimestamp();
+                var deltaTime = Stopwatch.GetElapsedTime(prev, now);
+                var io = ImGui.GetIO();
+                io.DeltaTime = (float)deltaTime.TotalSeconds;
+                _backend.BeginRender();
+                ImGui.NewFrame();
+                Render();
+                ImGui.Render();
+                _backend.EndRender();
+                if ((io.ConfigFlags & ImGuiConfigFlags.ViewportsEnable) != 0)
                 {
-                    delayMs = 1000f / this.FPSLimit;
-                    currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
-                    sleepTimeMs = (int)(delayMs - (currentTimeSec * 1000));
-                    if (sleepTimeMs > 0)
+                    ImGui.UpdatePlatformWindows();
+                    ImGui.RenderPlatformWindowsDefault();
+                }
+                
+                if (FPSLimit > 0)
+                {
+                    var timePerFrameTarget = TimeSpan.FromSeconds(1) / FPSLimit;
+                    var sleep = timePerFrameTarget - deltaTime;
+                    if (sleep > TimeSpan.Zero)
                     {
-                        Thread.Sleep(sleepTimeMs);
+                        Thread.Sleep(sleep);
                     }
                 }
 
-                this.ReplaceFontIfRequired();
+                ReplaceFontIfRequired();
             }
         }
 
         private void ReplaceFontIfRequired()
         {
-            if (this.renderer != null)
+            while (_fontUpdates.TryDequeue(out var update))
             {
-                while (this.fontUpdates.TryDequeue(out var update))
-                {
-                    this.renderer.UpdateFontTexture(update);
-                }
+                var io = ImGui.GetIO();
+                io.Fonts.Clear();
+                var config = ImGui.ImFontConfig();
+                update(config);
+                io.FontDefault = null;
+                config.Destroy();
             }
         }
 
-        private async Task InitializeResources()
+        private void InitializeResources()
         {
-            D3D11.D3D11CreateDevice(
-                null,
-                DriverType.Hardware,
-                DeviceCreationFlags.None,
-                new[] { FeatureLevel.Level_10_0 },
-                out device,
-                out deviceContext);
-            
-            selfPointer = Kernel32.GetModuleHandle(null);
-            wndClass = new WNDCLASSEX
-            {
-                Size = Unsafe.SizeOf<WNDCLASSEX>(),
-                Styles = WindowClassStyles.CS_HREDRAW | WindowClassStyles.CS_VREDRAW | WindowClassStyles.CS_PARENTDC,
-                WindowProc = WndProc,
-                InstanceHandle = this.selfPointer,
-                CursorHandle = User32.LoadCursor(IntPtr.Zero, SystemCursor.IDC_ARROW),
-                BackgroundBrushHandle = IntPtr.Zero,
-                IconHandle = IntPtr.Zero,
-                MenuName = string.Empty,
-                ClassName = this.title,
-                SmallIconHandle= IntPtr.Zero,
-                ClassExtraBytes = 0,
-                WindowExtraBytes = 0
-            };
-
-            if (User32.RegisterClassEx(ref wndClass) == 0)
-            {
-                throw new Exception($"Failed to Register class of name {wndClass.ClassName}");
-            }
-
-            window = new Win32Window(wndClass.ClassName, 1, 1, 0, 0, title,
-                0, WindowExStyles.WS_EX_TOOLWINDOW);
-            
             var ctx = ImGui.CreateContext();
             
             var io = ImGui.GetIO();
@@ -425,25 +332,10 @@ namespace ClickableTransparentOverlay
             io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable;
             io.ConfigViewportsNoAutoMerge = true;
             
-            ImGuiImplWin32.SetCurrentContext(ctx);
-            ImGuiImplWin32.Init(window.Handle);
-            
-            renderer = new ImGuiRenderer(ctx, device, deviceContext, 0, 0);
-            overlayIsReady = true;
-            await PostInitialized();
-        }
+            _backend = T.Create(ctx, _title);
 
-        private IntPtr WndProc(IntPtr hWnd, uint msg, UIntPtr wParam, IntPtr lParam)
-        {
-            if (this.overlayIsReady)
-            {
-                if (ImGuiImplWin32.WndProcHandler(hWnd, msg, wParam, lParam) != 0)
-                {
-                    return IntPtr.Zero;
-                }
-            }
-
-            return User32.DefWindowProc(hWnd, msg, wParam, lParam);
+            _ready.SetResult();
+            PostInitialized();
         }
     }
 }

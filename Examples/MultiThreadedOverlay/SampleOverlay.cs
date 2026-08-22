@@ -1,4 +1,5 @@
-﻿using Hexa.NET.ImGui;
+﻿using ClickableTransparentOverlay.Backends.Windows;
+using Hexa.NET.ImGui;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Vortice.DXGI;
@@ -11,12 +12,11 @@ namespace MultiThreadedOverlay
     using System.Numerics;
     using System.Threading;
     using ClickableTransparentOverlay;
-    using ClickableTransparentOverlay.Win32;
 
     /// <summary>
     /// Render Loop and Logic Loop are independent from each other. 
     /// </summary>
-    public class SampleOverlay : Overlay
+    public class SampleOverlay : Overlay<WindowsBackend>
     {
         private const string IMAGE_PATH = "image.png";
         private readonly Image<Rgba32> img;
@@ -92,7 +92,7 @@ namespace MultiThreadedOverlay
             
             state.RenderFramesCounter.Increment();
             
-            if (Utils.IsKeyPressedAndNotTimeout(VK.F12)) //F12.
+            if (ImGui.IsKeyPressed(ImGuiKey.F12, false))
             {
                 state.ShowClickableMenu = !state.ShowClickableMenu;
             }
@@ -180,7 +180,7 @@ namespace MultiThreadedOverlay
             ImGui.NewLine();
             if (img?.DangerousTryGetSinglePixelMemory(out var mem) == true)
             {
-                AddOrGetImagePointer("image", mem, img.Width, img.Height, Format.R8G8B8A8_UNorm, out var imgPtr);
+                AddOrGetImagePointer("image", mem, img.Width, img.Height, (uint)Format.R8G8B8A8_UNorm, out var imgPtr);
                 ImGui.Image(imgPtr, new Vector2(img.Width, img.Height));
             }
             else

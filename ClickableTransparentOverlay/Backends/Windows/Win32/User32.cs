@@ -1094,10 +1094,10 @@
         [DllImport(LibraryName, CharSet = CharSet.Unicode)]
         public static extern IntPtr DispatchMessage([In] ref Message lpmsg);
 
-        [DllImport("user32.dll", SetLastError = true)]
+        [DllImport(LibraryName, SetLastError = true)]
         private static extern uint GetWindowLongPtr(IntPtr hWnd, int nIndex);
 
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "GetWindowLong")]
+        [DllImport(LibraryName, SetLastError = true, EntryPoint = "GetWindowLong")]
         private static extern uint GetWindowLong32b(IntPtr hWnd, int nIndex);
 
         public static uint GetWindowLong(IntPtr hWnd, int nIndex)
@@ -1110,10 +1110,10 @@
             return GetWindowLongPtr(hWnd, nIndex);
         }
 
-        [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowLong")]
+        [DllImport(LibraryName, SetLastError = true, EntryPoint = "SetWindowLong")]
         private static extern uint SetWindowLong32b(IntPtr hWnd, int nIndex, uint value);
 
-        [DllImport("user32.dll", SetLastError = true)]
+        [DllImport(LibraryName, SetLastError = true)]
         private static extern uint SetWindowLongPtr(IntPtr hWnd, int nIndex, uint value);
 
         public static uint SetWindowLong(IntPtr hWnd, int nIndex, uint value)
@@ -1128,10 +1128,10 @@
 
         [DllImport(LibraryName, CharSet = CharSet.Unicode)]
         public static extern IntPtr CreateWindowEx(
-            int exStyle,
+            WindowExStyles exStyle,
             string className,
             string windowName,
-            int style,
+            WindowStyles style,
             int x, int y,
             int width, int height,
             IntPtr hwndParent,

@@ -1,4 +1,5 @@
-﻿using Hexa.NET.ImGui;
+﻿using ClickableTransparentOverlay.Backends.Windows;
+using Hexa.NET.ImGui;
 using Vortice.DXGI;
 
 namespace SingleThreadedOverlayWithCoroutines
@@ -16,7 +17,7 @@ namespace SingleThreadedOverlayWithCoroutines
     /// <summary>
     /// Render Loop and Logic Loop are synchronized.
     /// </summary>
-    internal class SampleOverlay : Overlay
+    internal class SampleOverlay : Overlay<WindowsBackend>
     {
         private ImFontPtr? font2 = null;
         private readonly uint[] custom1 = new uint[3] { 0x0020, 0xFFFF, 0x00 };
@@ -31,7 +32,6 @@ namespace SingleThreadedOverlayWithCoroutines
         private Image<Rgba32> image = new(100, 100);
 
         public SampleOverlay()
-            : base(DPIAware: true)
         {
             myRoutine1 = CoroutineHandler.Start(TickServiceAsync(), name: "MyRoutine-1");
             myRoutine2 = CoroutineHandler.Start(EventServiceAsync(), name: "MyRoutine-2");
@@ -195,7 +195,7 @@ namespace SingleThreadedOverlayWithCoroutines
             {
                 throw new Exception("Failed to get image memory!");
             }
-            this.AddOrGetImagePointer("image", memory, image.Width, image.Height, Format.R8G8B8A8_UNorm_SRgb, out var handle);
+            this.AddOrGetImagePointer("image", memory, image.Width, image.Height, (uint)Format.R8G8B8A8_UNorm_SRgb, out var handle);
             ImGui.GetBackgroundDrawList().AddImage(handle, new Vector2(200f), new Vector2(300f));
         }
     }
