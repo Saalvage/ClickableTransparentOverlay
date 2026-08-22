@@ -106,18 +106,16 @@ namespace ClickableTransparentOverlay
             var indexResource = ctx.Map(indexBuffer, 0, MapMode.WriteDiscard, Vortice.Direct3D11.MapFlags.None);
             var vertexResourcePointer = (ImDrawVert*)vertexResource.DataPointer;
             var indexResourcePointer = (ImDrawIdx*)indexResource.DataPointer;
-            for (int n = 0; n < data.CmdLists.Size; n++)
+            foreach (var cmdList in data.CmdLists)
             {
-                var cmdlList = data.CmdLists[n];
+                var vertBytes = cmdList.VtxBuffer.Size * sizeof(ImDrawVert);
+                Buffer.MemoryCopy(cmdList.VtxBuffer.Data, vertexResourcePointer, vertBytes, vertBytes);
 
-                var vertBytes = cmdlList.VtxBuffer.Size * sizeof(ImDrawVert);
-                Buffer.MemoryCopy((void*)cmdlList.VtxBuffer.Data, vertexResourcePointer, vertBytes, vertBytes);
+                var idxBytes = cmdList.IdxBuffer.Size * sizeof(ImDrawIdx);
+                Buffer.MemoryCopy(cmdList.IdxBuffer.Data, indexResourcePointer, idxBytes, idxBytes);
 
-                var idxBytes = cmdlList.IdxBuffer.Size * sizeof(ImDrawIdx);
-                Buffer.MemoryCopy((void*)cmdlList.IdxBuffer.Data, indexResourcePointer, idxBytes, idxBytes);
-
-                vertexResourcePointer += cmdlList.VtxBuffer.Size;
-                indexResourcePointer += cmdlList.IdxBuffer.Size;
+                vertexResourcePointer += cmdList.VtxBuffer.Size;
+                indexResourcePointer += cmdList.IdxBuffer.Size;
             }
             ctx.Unmap(vertexBuffer, 0);
             ctx.Unmap(indexBuffer, 0);
@@ -146,12 +144,10 @@ namespace ClickableTransparentOverlay
             // (Because we merged all buffers into a single one, we maintain our own offset into them)
             int global_idx_offset = 0;
             int global_vtx_offset = 0;
-            for (int n = 0; n < data.CmdLists.Size; n++)
+            foreach (var cmdList in data.CmdLists)
             {
-                var cmdList = data.CmdLists[n];
-                for (int i = 0; i < cmdList.CmdBuffer.Size; i++)
+                foreach (var cmd in cmdList.CmdBuffer)
                 {
-                    var cmd = cmdList.CmdBuffer[i];
                     if (cmd.UserCallback != null)
                     {
                         throw new NotImplementedException("user callbacks not implemented");
@@ -265,9 +261,8 @@ namespace ClickableTransparentOverlay
         void SyncTextures()
         {
             var io = ImGui.GetPlatformIO();
-            for (var i = 0; i < io.Textures.Size; i++)
+            foreach (var tex in io.Textures)
             {
-                var tex = io.Textures[i];
                 if (tex.Status != ImTextureStatus.Ok)
                 {
                     this.UpdateTexture(tex);
@@ -299,9 +294,8 @@ namespace ClickableTransparentOverlay
                     if (textureResources.TryGetValue(tex.GetTexID(), out var srv))
                     {
                         using var texture = srv.Resource.QueryInterface<ID3D11Texture2D>();
-                        for (var i = 0; i < tex.Updates.Size; i++)
+                        foreach (var rect in tex.Updates)
                         {
-                            var rect = tex.Updates[i];
                             var box = new Box(rect.X, rect.Y, 0, rect.X + rect.W, rect.Y + rect.H, 1);
                             deviceContext.UpdateSubresource(texture, 0, box, (IntPtr)tex.GetPixelsAt(rect.X, rect.Y), tex.GetPitch(), 0);
                         }
