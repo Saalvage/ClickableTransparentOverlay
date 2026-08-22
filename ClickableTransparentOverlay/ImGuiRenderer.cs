@@ -201,6 +201,10 @@ namespace ClickableTransparentOverlay
             inputLayout?.Release();
             vertexShader?.Release();
             vertexShaderBlob?.Release();
+            deviceContext.Release();
+            device.Release();
+
+            device = null;
         }
 
         public void Resize(int width, int height)
