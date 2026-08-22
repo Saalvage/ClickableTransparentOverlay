@@ -1,4 +1,6 @@
-﻿namespace SingleThreadedOverlayWithCoroutines
+﻿using Vortice.DXGI;
+
+namespace SingleThreadedOverlayWithCoroutines
 {
     using System.Collections.Generic;
     using ClickableTransparentOverlay;
@@ -9,7 +11,6 @@
     using System.Threading.Tasks;
     using System.Numerics;
     using System;
-    using System.Drawing;
     using System.IO;
 
     /// <summary>
@@ -196,7 +197,11 @@
                 ImGui.ShowDemoWindow(ref demoWindow);
             }
 
-            this.AddOrGetImagePointer("image", image, true, out var handle);
+            if (!image.DangerousTryGetSinglePixelMemory(out var memory))
+            {
+                throw new Exception("Failed to get image memory!");
+            }
+            this.AddOrGetImagePointer("image", memory, image.Width, image.Height, Format.R8G8B8A8_UNorm_SRgb, out var handle);
             ImGui.GetBackgroundDrawList().AddImage(handle, new Vector2(200f), new Vector2(300f));
         }
     }

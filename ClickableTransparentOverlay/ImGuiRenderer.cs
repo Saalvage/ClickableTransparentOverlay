@@ -1,4 +1,6 @@
-﻿namespace ClickableTransparentOverlay
+﻿using System.Buffers;
+
+namespace ClickableTransparentOverlay
 {
     using ImGuiNET;
     using ImDrawIdx = System.UInt16;
@@ -11,9 +13,6 @@
     using System.Collections.Generic;
     using System;
     using System.Linq;
-    using SixLabors.ImageSharp;
-    using SixLabors.ImageSharp.PixelFormats;
-    using System.Buffers;
 
     unsafe internal sealed class ImGuiRenderer : IDisposable
     {
@@ -203,13 +202,9 @@
             ImGui.GetIO().DisplaySize = new Vector2(width, height);
         }
 
-        public IntPtr CreateImageTexture(Image<Rgba32> image, Format format)
+        public IntPtr CreateImageTexture<T>(Memory<T> memory, int width, int height, Format format) where T : unmanaged
         {
-            var texDesc = new Texture2DDescription(format, image.Width, image.Height, 1, 1);
-            if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> memory))
-            {
-                throw new Exception("Make sure to initialize MemoryAllocator.Default!");
-            }
+            var texDesc = new Texture2DDescription(format, width, height, 1, 1);
 
             using MemoryHandle imageMemoryHandle = memory.Pin();
             var subResource = new SubresourceData(imageMemoryHandle.Pointer, texDesc.Width * 4);

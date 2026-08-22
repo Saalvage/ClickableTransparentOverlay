@@ -1,6 +1,5 @@
 ﻿namespace ClickableTransparentOverlay.Win32
 {
-    using System;
     using System.Runtime.InteropServices;
 
     internal static class Winmm

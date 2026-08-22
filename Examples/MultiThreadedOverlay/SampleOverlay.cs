@@ -1,4 +1,8 @@
-﻿namespace MultiThreadedOverlay
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using Vortice.DXGI;
+
+namespace MultiThreadedOverlay
 {
     using System;
     using System.Diagnostics;
@@ -14,11 +18,19 @@
     /// </summary>
     public class SampleOverlay : Overlay
     {
+        private const string IMAGE_PATH = "image.png";
+        private readonly Image<Rgba32> img;
+        
         private volatile State state;
         private readonly Thread logicThread;
 
         public SampleOverlay() : base(3840, 2160)
         {
+            if (File.Exists(IMAGE_PATH))
+            {
+                img = Image.Load<Rgba32>(IMAGE_PATH);
+            }
+            
             state = new State();
             logicThread = new Thread(() =>
             {
@@ -175,15 +187,10 @@
             }
 
             ImGui.NewLine();
-            if (File.Exists("image.png"))
+            if (img?.DangerousTryGetSinglePixelMemory(out var mem) == true)
             {
-                AddOrGetImagePointer(
-                    "image.png",
-                    false,
-                    out IntPtr imgPtr,
-                    out uint w,
-                    out uint h);
-                ImGui.Image(imgPtr, new Vector2(w, h));
+                AddOrGetImagePointer("image", mem, img.Width, img.Height, Format.R8G8B8A8_UNorm, out var imgPtr);
+                ImGui.Image(imgPtr, new Vector2(img.Width, img.Height));
             }
             else
             {

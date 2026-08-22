@@ -1,9 +1,7 @@
-﻿namespace ClickableTransparentOverlay
+﻿using ClickableTransparentOverlay.Win32;
+
+namespace ClickableTransparentOverlay
 {
-    using ClickableTransparentOverlay.Win32;
-    using SixLabors.ImageSharp;
-    using SixLabors.ImageSharp.PixelFormats;
-    using SixLabors.ImageSharp.Formats;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -400,42 +398,14 @@
         /// cache the image internally rather than creating a new texture on every call,
         /// so this function can be called multiple times per frame.
         /// </summary>
-        /// <param name="filePath">Path to the image on disk.</param>
-        /// <param name="srgb"> a value indicating whether pixel format is srgb or not.</param>
-        /// <param name="handle">output pointer to the image in the graphic device.</param>
-        /// <param name="width">width of the loaded texture.</param>
-        /// <param name="height">height of the loaded texture.</param>
-        public void AddOrGetImagePointer(string filePath, bool srgb, out IntPtr handle, out uint width, out uint height)
-        {
-            if (this.loadedTexturesPtrs.TryGetValue(filePath, out var data))
-            {
-                handle = data.Handle;
-                width = data.Width;
-                height = data.Height;
-            }
-            else
-            {
-                var decorderOptions = new DecoderOptions();
-                decorderOptions.Configuration.PreferContiguousImageBuffers = true;
-                using var image = Image.Load<Rgba32>(decorderOptions, filePath);
-                handle = this.renderer.CreateImageTexture(image, srgb ? Format.R8G8B8A8_UNorm_SRgb : Format.R8G8B8A8_UNorm);
-                width = (uint)image.Width;
-                height = (uint)image.Height;
-                this.loadedTexturesPtrs.Add(filePath, new(handle, width, height));
-            }
-        }
-
-        /// <summary>
-        /// Adds the image to the Graphic Device as a texture.
-        /// Then returns the pointer of the added texture. It also
-        /// cache the image internally rather than creating a new texture on every call,
-        /// so this function can be called multiple times per frame.
-        /// </summary>
         /// <param name="name">user friendly name given to the image.</param>
-        /// <param name="image">Image data in <see cref="Image"> format.</param>
-        /// <param name="srgb"> a value indicating whether pixel format is srgb or not.</param>
+        /// <param name="memory">Raw image data in the specific format.</param>
+        /// <param name="width">Image width.</param>
+        /// <param name="height">Image height.</param>
+        /// <param name="format">Format of the image data.</param>
         /// <param name="handle">output pointer to the image in the graphic device.</param>
-        public void AddOrGetImagePointer(string name, Image<Rgba32> image, bool srgb, out IntPtr handle)
+        public void AddOrGetImagePointer<T>(string name, Memory<T> memory, int width, int height, Format format,
+            out IntPtr handle) where T : unmanaged
         {
             if (this.loadedTexturesPtrs.TryGetValue(name, out var data))
             {
@@ -443,8 +413,8 @@
             }
             else
             {
-                handle = this.renderer.CreateImageTexture(image, srgb ? Format.R8G8B8A8_UNorm_SRgb : Format.R8G8B8A8_UNorm);
-                this.loadedTexturesPtrs.Add(name, new(handle, (uint)image.Width, (uint)image.Height));
+                handle = this.renderer.CreateImageTexture(memory, width, height, format);
+                this.loadedTexturesPtrs.Add(name, new(handle, (uint)width, (uint)height));
             }
         }
 
