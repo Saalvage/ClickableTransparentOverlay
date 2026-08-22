@@ -10,7 +10,7 @@ namespace SimpleExample
         private bool wantKeepDemoWindow = true;
         private int FPSHelper;
 
-        public SampleOverlay() : base(3840, 2160)
+        public SampleOverlay()
         {
             this.FPSHelper = this.FPSLimit;
         }

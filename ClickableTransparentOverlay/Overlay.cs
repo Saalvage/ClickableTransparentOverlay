@@ -1,5 +1,6 @@
 ﻿using ClickableTransparentOverlay.Win32;
 using Hexa.NET.ImGui;
+using Hexa.NET.ImGui.Backends.Win32;
 
 namespace ClickableTransparentOverlay
 {
@@ -15,8 +16,6 @@ namespace ClickableTransparentOverlay
     using Vortice.Direct3D11;
     using Vortice.DXGI;
     using Vortice.Mathematics;
-    using Point = System.Drawing.Point;
-    using Size = System.Drawing.Size;
     using System.Collections.Concurrent;
 
     /// <summary>
@@ -26,8 +25,6 @@ namespace ClickableTransparentOverlay
     {
         private readonly string title;
         private readonly Format format;
-        private readonly int initialWindowWidth;
-        private readonly int initialWindowHeight;
 
         private WNDCLASSEX wndClass;
 
@@ -38,19 +35,14 @@ namespace ClickableTransparentOverlay
         public Win32Window window;
         private ID3D11Device device;
         private ID3D11DeviceContext deviceContext;
-        private IDXGISwapChain swapChain;
-        private ID3D11Texture2D backBuffer;
-        private ID3D11RenderTargetView renderView;
 
         private ImGuiRenderer renderer;
-        private ImGuiInputHandler inputhandler;
 
         private bool _disposedValue;
         private IntPtr selfPointer;
         private Thread renderThread;
         private volatile CancellationTokenSource cancellationTokenSource;
         private volatile bool overlayIsReady;
-        private int fpslimit;
 
         private Dictionary<string, (IntPtr Handle, uint Width, uint Height)> loadedTexturesPtrs;
 
@@ -61,96 +53,14 @@ namespace ClickableTransparentOverlay
         /// <summary>
         /// Initializes a new instance of the <see cref="Overlay"/> class.
         /// </summary>
-        public Overlay() : this("Overlay")
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
-        /// <param name="windowTitle">
-        /// Title of the window created by the overlay
-        /// </param>
-        public Overlay(string windowTitle) : this(windowTitle, false)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
-        /// <param name="DPIAware">
-        /// should the overlay scale with windows scale value or not.
-        /// </param>
-        public Overlay(bool DPIAware) : this("Overlay", DPIAware)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
         /// <param name="windowTitle">
         /// Title of the window created by the overlay
         /// </param>
         /// <param name="DPIAware">
         /// should the overlay scale with windows scale value or not.
         /// </param>
-        public Overlay(string windowTitle, bool DPIAware) : this(windowTitle, DPIAware,
-            User32.GetSystemMetrics(SystemMetrics.SM_CXSCREEN),
-            User32.GetSystemMetrics(SystemMetrics.SM_CYSCREEN))
+        public Overlay(string windowTitle = "Overlay", bool DPIAware = false)
         {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
-        /// <param name="windowWidth">
-        /// width to use when creating the clickable  transparent overlay window
-        /// </param>
-        /// <param name="windowHeight">
-        /// height to use when creating the clickable transparent overlay window
-        /// </param>
-        public Overlay(int windowWidth, int windowHeight) : this("Overlay", windowWidth, windowHeight)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
-        /// <param name="windowTitle">
-        /// Title of the window created by the overlay
-        /// </param>
-        /// <param name="windowWidth">
-        /// width to use when creating the clickable  transparent overlay window
-        /// </param>
-        /// <param name="windowHeight">
-        /// height to use when creating the clickable transparent overlay window
-        /// </param>
-        public Overlay(string windowTitle, int windowWidth, int windowHeight) : this(windowTitle, false, windowWidth, windowHeight)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Overlay"/> class.
-        /// </summary>
-        /// <param name="windowTitle">
-        /// Title of the window created by the overlay
-        /// </param>
-        /// <param name="DPIAware">
-        /// should the overlay scale with windows scale value or not.
-        /// </param>
-        /// <param name="vsync">
-        /// vsync is enabled if true otherwise disabled.
-        /// </param>
-        /// <param name="windowWidth">
-        /// width to use when creating the clickable  transparent overlay window
-        /// </param>
-        /// <param name="windowHeight">
-        /// height to use when creating the clickable transparent overlay window
-        /// </param>
-        public Overlay(string windowTitle, bool DPIAware, int windowWidth, int windowHeight)
-        {
-            this.initialWindowWidth = windowWidth;
-            this.initialWindowHeight = windowHeight;
             this.VSync = false;
             this.FPSLimit = 60;
             this._disposedValue = false;
@@ -308,73 +218,22 @@ namespace ClickableTransparentOverlay
         /// </summary>
         public int FPSLimit
         {
-            get => this.fpslimit;
-            set
-            {
+            get;
+            set {
                 if (value == 0)
                 {
-                    this.fpslimit = value;
+                    field = value;
                     _ = Winmm.MM_EndPeriod(1);
                 }
                 else if (value > 0)
                 {
-                    this.fpslimit = value;
+                    field = value;
                     _ = Winmm.MM_BeginPeriod(1);
                 }
                 else
                 {
                     // ignore negative values.
                 }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the position of the overlay window.
-        /// </summary>
-        public Point Position
-        {
-            get
-            {
-                return this.window.Dimensions.Location;
-            }
-
-            set
-            {
-                if (this.window.Dimensions.Location != value)
-                {
-                    this.window.Dimensions.Location = value;
-                    User32.MoveWindow(this.window.Handle, value.X, value.Y, this.window.Dimensions.Width, this.window.Dimensions.Height, true);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the size of the overlay window.
-        /// </summary>
-        public Size Size
-        {
-            get
-            {
-                return this.window.Dimensions.Size;
-            }
-            set
-            {
-                if (this.window.Dimensions.Size != value)
-                {
-                    this.window.Dimensions.Size = value;
-                    User32.MoveWindow(this.window.Handle, this.window.Dimensions.X, this.window.Dimensions.Y, value.Width, value.Height, true);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets the number of displays available on the computer.
-        /// </summary>
-        public static int NumberVideoDisplays
-        {
-            get
-            {
-                return User32.GetSystemMetrics(SystemMetrics.SM_CMONITORS);
             }
         }
 
@@ -445,13 +304,14 @@ namespace ClickableTransparentOverlay
 
                 this.cancellationTokenSource?.Dispose();
                 this.fontUpdates?.Clear();
-                this.swapChain?.Release();
-                this.backBuffer?.Release();
-                this.renderView?.Release();
                 this.renderer?.Dispose();
                 this.window?.Dispose();
                 this.deviceContext?.Release();
                 this.device?.Release();
+                
+                ImGuiImplWin32.Shutdown();
+                ImGuiImplWin32.SetCurrentContext(ImGuiContextPtr.Null);
+                ImGui.DestroyContext();
             }
 
             if (this.selfPointer != IntPtr.Zero)
@@ -493,18 +353,11 @@ namespace ClickableTransparentOverlay
                 currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
                 stopwatch.Restart();
                 this.window.PumpEvents();
-                Utils.SetOverlayClickable(this.window.Handle, this.inputhandler.Update());
-                this.renderer.Update(currentTimeSec, () => { Render(); });
-                this.deviceContext.OMSetRenderTargets(renderView);
-                this.deviceContext.ClearRenderTargetView(renderView, clearColor);
+                ImGuiImplWin32.NewFrame();
+                this.renderer.Update(currentTimeSec, Render);
                 this.renderer.Render();
-                if (VSync)
+                if (this.FPSLimit > 0)
                 {
-                    this.swapChain.Present(1, PresentFlags.None); // Present with vsync
-                }
-                else if (this.FPSLimit > 0)
-                {
-                    this.swapChain.Present(0, PresentFlags.None);
                     delayMs = 1000f / this.FPSLimit;
                     currentTimeSec = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
                     sleepTimeMs = (int)(delayMs - (currentTimeSec * 1000));
@@ -512,10 +365,6 @@ namespace ClickableTransparentOverlay
                     {
                         Thread.Sleep(sleepTimeMs);
                     }
-                }
-                else
-                {
-                    this.swapChain.Present(0, PresentFlags.None); // Present without vsync
                 }
 
                 this.ReplaceFontIfRequired();
@@ -533,42 +382,6 @@ namespace ClickableTransparentOverlay
             }
         }
 
-        private void OnResize(int width, int height)
-        {
-            if (renderView == null)//first show
-            {
-                using var dxgiFactory = device.QueryInterface<IDXGIDevice>().GetParent<IDXGIAdapter>().GetParent<IDXGIFactory>();
-                var swapchainDesc = new SwapChainDescription()
-                {
-                    BufferCount = 1,
-                    BufferDescription = new ModeDescription(width, height, this.format),
-                    Windowed = true,
-                    OutputWindow = this.window.Handle,
-                    SampleDescription = new SampleDescription(1, 0),
-                    SwapEffect = SwapEffect.Discard,
-                    BufferUsage = Usage.RenderTargetOutput,
-                };
-
-                this.swapChain = dxgiFactory.CreateSwapChain(this.device, swapchainDesc);
-                dxgiFactory.MakeWindowAssociation(this.window.Handle, WindowAssociationFlags.IgnoreAll);
-
-                this.backBuffer = this.swapChain.GetBuffer<ID3D11Texture2D>(0);
-                this.renderView = this.device.CreateRenderTargetView(backBuffer);
-            }
-            else
-            {
-                this.renderView.Dispose();
-                this.backBuffer.Dispose();
-
-                this.swapChain.ResizeBuffers(1, width, height, this.format, SwapChainFlags.None);
-
-                backBuffer = this.swapChain.GetBuffer<ID3D11Texture2D1>(0);
-                renderView = this.device.CreateRenderTargetView(backBuffer);
-            }
-
-            this.renderer.Resize(width, height);
-        }
-
         private async Task InitializeResources()
         {
             D3D11.D3D11CreateDevice(
@@ -576,10 +389,11 @@ namespace ClickableTransparentOverlay
                 DriverType.Hardware,
                 DeviceCreationFlags.None,
                 new[] { FeatureLevel.Level_10_0 },
-                out this.device,
-                out this.deviceContext);
-            this.selfPointer = Kernel32.GetModuleHandle(null);
-            this.wndClass = new WNDCLASSEX
+                out device,
+                out deviceContext);
+            
+            selfPointer = Kernel32.GetModuleHandle(null);
+            wndClass = new WNDCLASSEX
             {
                 Size = Unsafe.SizeOf<WNDCLASSEX>(),
                 Styles = WindowClassStyles.CS_HREDRAW | WindowClassStyles.CS_VREDRAW | WindowClassStyles.CS_PARENTDC,
@@ -595,64 +409,35 @@ namespace ClickableTransparentOverlay
                 WindowExtraBytes = 0
             };
 
-            if (User32.RegisterClassEx(ref this.wndClass) == 0)
+            if (User32.RegisterClassEx(ref wndClass) == 0)
             {
-                throw new Exception($"Failed to Register class of name {this.wndClass.ClassName}");
+                throw new Exception($"Failed to Register class of name {wndClass.ClassName}");
             }
 
-            this.window = new Win32Window(
-                wndClass.ClassName,
-                this.initialWindowWidth,
-                this.initialWindowHeight,
-                0,
-                0,
-                this.title,
-                WindowStyles.WS_POPUP,
-                WindowExStyles.WS_EX_ACCEPTFILES | WindowExStyles.WS_EX_TOPMOST);
-            this.renderer = new ImGuiRenderer(device, deviceContext, this.initialWindowWidth, this.initialWindowHeight);
-            this.inputhandler = new ImGuiInputHandler(this.window.Handle);
-            this.overlayIsReady = true;
-            await this.PostInitialized();
-            User32.ShowWindow(this.window.Handle, ShowWindowCommand.Show);
-            Utils.InitTransparency(this.window.Handle);
-        }
-
-        private bool ProcessMessage(WindowMessage msg, UIntPtr wParam, IntPtr lParam)
-        {
-            switch (msg)
-            {
-                case WindowMessage.ShowWindow:
-                    this.OnResize(this.window.Dimensions.Width, this.window.Dimensions.Height);
-                    break;
-                case WindowMessage.Size:
-                    switch ((SizeMessage)wParam)
-                    {
-                        case SizeMessage.SIZE_RESTORED:
-                        case SizeMessage.SIZE_MAXIMIZED:
-                            var lp = (int)lParam;
-                            this.OnResize(Utils.Loword(lp), Utils.Hiword(lp));
-                            break;
-                        default:
-                            break;
-                    }
-
-                    break;
-                case WindowMessage.Destroy:
-                    this.Close();
-                    break;
-                default:
-                    break;
-            }
-
-            return false;
+            window = new Win32Window(wndClass.ClassName, 1, 1, 0, 0, title,
+                0, WindowExStyles.WS_EX_TOOLWINDOW);
+            
+            var ctx = ImGui.CreateContext();
+            
+            var io = ImGui.GetIO();
+            io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard;
+            io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+            io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable;
+            io.ConfigViewportsNoAutoMerge = true;
+            
+            ImGuiImplWin32.SetCurrentContext(ctx);
+            ImGuiImplWin32.Init(window.Handle);
+            
+            renderer = new ImGuiRenderer(ctx, device, deviceContext, 0, 0);
+            overlayIsReady = true;
+            await PostInitialized();
         }
 
         private IntPtr WndProc(IntPtr hWnd, uint msg, UIntPtr wParam, IntPtr lParam)
         {
             if (this.overlayIsReady)
             {
-                if (this.inputhandler.ProcessMessage((WindowMessage)msg, wParam, lParam) ||
-                    this.ProcessMessage((WindowMessage)msg, wParam, lParam))
+                if (ImGuiImplWin32.WndProcHandler(hWnd, msg, wParam, lParam) != 0)
                 {
                     return IntPtr.Zero;
                 }

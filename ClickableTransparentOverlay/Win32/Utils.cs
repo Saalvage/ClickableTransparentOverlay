@@ -5,17 +5,6 @@
 
     public static class Utils
     {
-        public static int Loword(int number) => number & 0x0000FFFF;
-        public static int Hiword(int number) => number >> 16;
-
-        /// <summary>
-        /// Gets a value indicating whether the overlay is clickable or not.
-        /// </summary>
-        internal static bool IsClickable { get; private set; } = true;
-
-        private static WindowExStyles Clickable = 0;
-        private static WindowExStyles NotClickable = 0;
-
         private static readonly Stopwatch sw = Stopwatch.StartNew();
         private static readonly long[] nVirtKeyTimeouts = new long[256]; // Total VirtKeys are 256.
 
@@ -58,44 +47,6 @@
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Allows the window to become transparent.
-        /// </summary>
-        /// <param name="handle">
-        /// Window native pointer.
-        /// </param>
-        internal static void InitTransparency(IntPtr handle)
-        {
-            Clickable = (WindowExStyles)User32.GetWindowLong(handle, (int)WindowLongParam.GWL_EXSTYLE);
-            NotClickable = Clickable | WindowExStyles.WS_EX_LAYERED | WindowExStyles.WS_EX_TRANSPARENT;
-            var margins = new Dwmapi.Margins(-1);
-            _ = Dwmapi.DwmExtendFrameIntoClientArea(handle, ref margins);
-            SetOverlayClickable(handle, true);
-        }
-
-        /// <summary>
-        /// Enables (clickable) / Disables (not clickable) the Window keyboard/mouse inputs.
-        /// NOTE: This function depends on InitTransparency being called when the Window was created.
-        /// </summary>
-        /// <param name="handle">Veldrid window handle in IntPtr format.</param>
-        /// <param name="WantClickable">Set to true if you want to make the window clickable otherwise false.</param>
-        internal static void SetOverlayClickable(IntPtr handle, bool WantClickable)
-        {
-            if (IsClickable ^ WantClickable)
-            {
-                if (WantClickable)
-                {
-                    User32.SetWindowLong(handle, (int)WindowLongParam.GWL_EXSTYLE, (uint)Clickable);
-                }
-                else
-                {
-                    User32.SetWindowLong(handle, (int)WindowLongParam.GWL_EXSTYLE, (uint)NotClickable);
-                }
-
-                IsClickable = WantClickable;
-            }
         }
     }
 }

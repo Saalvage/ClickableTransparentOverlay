@@ -31,7 +31,7 @@ namespace SingleThreadedOverlayWithCoroutines
         private Image<Rgba32> image = new(100, 100);
 
         public SampleOverlay()
-            : base(true)
+            : base(DPIAware: true)
         {
             myRoutine1 = CoroutineHandler.Start(TickServiceAsync(), name: "MyRoutine-1");
             myRoutine2 = CoroutineHandler.Start(EventServiceAsync(), name: "MyRoutine-2");

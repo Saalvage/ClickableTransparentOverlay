@@ -24,7 +24,7 @@ namespace MultiThreadedOverlay
         private volatile State state;
         private readonly Thread logicThread;
 
-        public SampleOverlay() : base(3840, 2160)
+        public SampleOverlay()
         {
             if (File.Exists(IMAGE_PATH))
             {
@@ -144,15 +144,6 @@ namespace MultiThreadedOverlay
             ImGui.Checkbox("Show full-screen non-clickable transparent overlay sample 2.", ref state.OverlaySample2.Show);
 
             ImGui.NewLine();
-            ImGui.SliderInt2("Set Position", ref state.resizeHelper[0], 0, 3840);
-            ImGui.SliderInt2("Set Size", ref state.resizeHelper[2], 0, 3840);
-            if (ImGui.Button("Resize"))
-            {
-                Position = new(state.resizeHelper[0], state.resizeHelper[1]);
-                Size = new(state.resizeHelper[2], state.resizeHelper[3]);
-            }
-
-            ImGui.NewLine();
             ImGui.SliderInt("###time(sec)", ref state.Seconds, 1, 30);
             if (ImGui.Button($"Hide for {state.Seconds} seconds"))
             {
@@ -215,7 +206,6 @@ namespace MultiThreadedOverlay
             ImGui.Text("I am sample Overlay to display stuff.");
             ImGui.Text("You can not click me.");
             ImGui.NewLine();
-            ImGui.Text($"Number of displays {Overlay.NumberVideoDisplays}");
             ImGui.Text($"Current Date: {DateTime.Now.Date.ToShortDateString()}");
             ImGui.Text($"Current Time: {DateTime.Now.TimeOfDay}");
             ImGui.Text($"Total Rendered Frames: {state.RenderFramesCounter.Count}");

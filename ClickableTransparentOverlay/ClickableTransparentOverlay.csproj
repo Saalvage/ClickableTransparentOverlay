@@ -15,6 +15,7 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishAot>true</PublishAot>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="Hexa.NET.ImGui" Version="3.1.0-experimental" />
+    <PackageReference Include="Hexa.NET.ImGui.Backends" Version="3.1.0-experimental" />
     <PackageReference Include="Vortice.D3DCompiler" Version="3.5.0" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.5.0" />
     <None Include="..\README.md" Pack="true" PackagePath="\" />
